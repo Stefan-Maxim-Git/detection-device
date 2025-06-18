@@ -8,7 +8,7 @@ from picamera2 import Picamera2
 # PiCamera thread function:
 # This function runs in a separate thread and captures frames from the PiCamera,
 # processes them, and pushes them to the GStreamer pipeline.
-def cam_thread_func(pipeline, v_width, v_height, fps):
+def cam_thread_func(pipeline, v_width, v_height, v_fps):
     # Setting up properties for the element in the pipeline 
 	# corresponding to the input (in this case, Pi Camera - rpi):
     input_src = pipeline.get_by_name("app_source")
@@ -20,7 +20,7 @@ def cam_thread_func(pipeline, v_width, v_height, fps):
             'size': (v_width, v_height),
             'format': 'RGB888'
         }
-        controls = {'FrameRate': fps}
+        controls = {'FrameRate': v_fps}
     
         config = cam.create_preview_configuration(
             main=main_conf, 
@@ -31,10 +31,11 @@ def cam_thread_func(pipeline, v_width, v_height, fps):
         cam.configure(config)
 
         width, height = config['main']['size']
+        fps = config['controls']['FrameRate']
         input_src.set_property(
             "caps", Gst.Caps.from_string(
                 f"video/x-raw, format=RGB, width={width}, height={height}, "
-                f"framerate=30/1, pixel-aspect-ratio=1/1"
+                f"framerate={fps}/1, pixel-aspect-ratio=1/1"
             )
         )
 

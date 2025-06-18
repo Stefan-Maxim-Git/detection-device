@@ -17,7 +17,7 @@ from hailo_apps_infra.gstreamer_helper_pipelines import(
 )
 
 from camera import cam_thread_func
-from callbacks import callback_func, user_callback_class
+from callbacks import callback_func, DetectionEventHandler
 
 # App Callback class:
 # Used for extracting data from the object detection process (sucb as labels)
@@ -25,7 +25,7 @@ from callbacks import callback_func, user_callback_class
 # - Frame count: counts the number of frames processed and returns it
 	
 class GstDetectionApp:
-	def __init__(self, app_callback, user_data: user_callback_class):
+	def __init__(self, app_callback, e_handler: DetectionEventHandler):
 		# Setting process title:
 		setproctitle.setproctitle("Object detection - Hailo")
 
@@ -55,7 +55,7 @@ class GstDetectionApp:
 
 		# Variables:
 		self.source = 'rpi' 
-		self.video_sink = "autovideosink"
+		self.video_sink = "fakesink" #"autovideosink"
 		self.pipeline = None				# Created using the Gst.parse_launch function
 		self.pipeline_string = None			# String that describes the pipeline
 		self.loop = None
@@ -82,8 +82,9 @@ class GstDetectionApp:
 			)
 		)
 
-		# App callback and user data:
-		self.user_data = user_data
+		# App callback and event handler:
+		# The callback function is also part of the event handler
+		self.e_handler = e_handler
 		self.app_callback = app_callback
 
 		# Thresholds string:
@@ -98,6 +99,7 @@ class GstDetectionApp:
 		
 		# Creating the pipeline:
 		self.create_pipeline()
+		self.e_handler.pipeline = self.pipeline
 
 	def shutdown(self, signum=None, frame=None):
 		print("Shutting down the application...")
@@ -207,7 +209,7 @@ class GstDetectionApp:
 		identity_pad.add_probe(
 			Gst.PadProbeType.BUFFER,
 			self.app_callback,  # This should be a function that processes the buffer
-			self.user_data  # Pass user data to the callback
+			self.e_handler  # Pass user data to the callback
 		)
 
 		# Check for the hailo_display element:
@@ -245,7 +247,7 @@ class GstDetectionApp:
 		try:
 			self.loop.run()
 		finally:
-			self.user_data.running = False
+			self.e_handler.running = False
 			self.pipeline.set_state(Gst.State.NULL)
 			for t in self.threads:
 				t.join(timeout=1)
@@ -282,9 +284,9 @@ def disable_qos(pipeline):
 
 if __name__ == "__main__":
 		# Create an instance of the user app callback class
-		user_data = user_callback_class(send_interval=2.0)
+		e_handler = DetectionEventHandler()
 		# Create an instance of the GStreamer detection application
-		app = GstDetectionApp(user_data.__call__, user_data)
+		app = GstDetectionApp(e_handler.__call__, e_handler)
 
 		# Run the application
 		app.run()
