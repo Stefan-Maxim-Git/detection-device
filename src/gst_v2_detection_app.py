@@ -17,7 +17,7 @@ from hailo_apps_infra.gstreamer_helper_pipelines import(
 )
 
 from camera import cam_thread_func
-from callbacks import callback_func, DetectionEventHandler
+from callbacks import callback_func, DetectionEventHandler, resume_pipeline_thread
 
 # App Callback class:
 # Used for extracting data from the object detection process (sucb as labels)
@@ -222,12 +222,19 @@ class GstDetectionApp:
 		# Setting up PiCamera Thread:
 		cam_thread = threading.Thread(
 			target=cam_thread_func,
-			args=(self.pipeline, 1280, 720, 30)	
+			args=(self.pipeline, 1280, 720, 30),
+			daemon=True	
+		)
+		resume_thread = threading.Thread(
+			target=resume_pipeline_thread,
+			args=(self.pipeline,),
+			daemon=True
 		)
 
-		cam_thread.daemon = True
 		self.threads.append(cam_thread)
+		self.threads.append(resume_thread)
 		cam_thread.start()
+		resume_thread.start()
 
 		# Start the pipeline:
 		# 1.Set pipeline state to PAUSED to allow elements to prepare for data flow
