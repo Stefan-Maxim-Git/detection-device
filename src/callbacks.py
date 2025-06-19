@@ -55,32 +55,34 @@ class DetectionEventHandler:
 			# Helper thread will send a signal to the SLM/TTL to start processing the label
 			# Once processed, receives "done" signal and resumes the pipeline
 			threading.Thread(
-				target=pipeline_control_thread,
-				args=(
-					self.pipeline,
-					label
-				),
+				target=send_label_thread,
+				args=(label,),
 				daemon=True
 			).start()
 		return Gst.PadProbeReturn.OK
 
-def pipeline_control_thread(pipeline, label, host='localhost', slm_port=5001, resume_port=5002):
+def send_label_thread(label, host='localhost', slm_port=5001):
 	# Needs to be in a try - catch block in the future for unexpected exceptions...
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 		s.connect((host, slm_port))
 		s.sendall(label.encode())
 		print(f"Sent object {label} to SLM/TTS server.")
 
+def resume_pipeline_thread(pipeline, resume_port=5002, host='localhost'):
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
 		server.bind((host, resume_port))
 		server.listen(1)
 		print("Waiting for resume signal... -main app")
-		conn, addr = server.accept()
-		data = conn.recv(1024).decode()
+		while True:
+			conn, addr = server.accept()
+			data = conn.recv(1024).decode()
 
-		if data.strip() == "resume":
-			print("Received resume signal, unpausing the pipeline...")
-			pipeline.set_state(Gst.State.PLAYING)
+			if data.strip() == "resume":
+				print("Received resume signal, unpausing the pipeline...")
+				pipeline.send_event(Gst.EVENT.new_flush_start())
+				pipeline.send_event(Gst.EVENT.new_flush_stop(False))
+				pipeline.set_state(Gst.State.PLAYING)
+
 
 
 # Fallback default function if user_data_class proves to not work:        
