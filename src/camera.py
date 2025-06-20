@@ -5,6 +5,7 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 from picamera2 import Picamera2 
 
+CAM_LOG_FORMAT = "\033[1;36m[camera_thread] \033[0m \t"
 # PiCamera thread function:
 # This function runs in a separate thread and captures frames from the PiCamera,
 # processes them, and pushes them to the GStreamer pipeline.
@@ -65,6 +66,10 @@ def cam_thread_func(pipeline, v_width, v_height, v_fps):
             # Pushing buffer to pipeline:
             ret = input_src.emit("push-buffer", gst_buffer)
             if ret != Gst.FlowReturn.OK:
-                print(f"Error pushing buffer to pipeline: {ret}")
-                break
+                if ret == Gst.FlowReturn.FLUSHING:
+                    break
+                else:
+                    print(f"{CAM_LOG_FORMAT}Error pushing buffer to pipeline: {ret}")
+                    break
             frame_count += 1
+        print(f"{CAM_LOG_FORMAT}Camera thread exited.")
