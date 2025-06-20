@@ -7,4 +7,5 @@ prototip.py
 temp_hailo_files/
 git_token.txt
 HuggingFace_Token.txt
+*.log
 
