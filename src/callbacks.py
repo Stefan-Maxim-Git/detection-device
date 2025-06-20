@@ -2,15 +2,14 @@ import hailo
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
-from text_generation import TextGenerator
+from gi.repository import GLib
 import threading
 import socket
 
+EVENT_HANDLER_LOG_FORMAT = "\033[1;35m[event_handler]\033[0m \t"
 class DetectionEventHandler:
 	def __init__(self):
-		self.running = True
 		self.fcount = 0
-		self.last_sent = 0
 		self.pipeline = None
 		self.paused = False
 
@@ -47,10 +46,12 @@ class DetectionEventHandler:
 			return Gst.PadProbeReturn.OK
 		
 		label = best_detection.get_label()
-		print(f"Object detecetd: {label}")
+		print(f"{EVENT_HANDLER_LOG_FORMAT}Object detected: {label}")
 		if not self.paused:
+			self.paused = True
 			self.pipeline.set_state(Gst.State.PAUSED)
-			print("Pipeline Paused.")
+			GLib.usleep(100000)
+			print(f"{EVENT_HANDLER_LOG_FORMAT}Pipeline Paused.")
 			# Send label to SLM/TTS  helper thread
 			# Helper thread will send a signal to the SLM/TTL to start processing the label
 			# Once processed, receives "done" signal and resumes the pipeline
@@ -66,26 +67,31 @@ def send_label_thread(label, host='localhost', slm_port=5001):
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 		s.connect((host, slm_port))
 		s.sendall(label.encode())
-		print(f"Sent object {label} to SLM/TTS server.")
+		print(f"{EVENT_HANDLER_LOG_FORMAT}Sent object {label} to SLM/TTS server.")
 
-def resume_pipeline_thread(pipeline, resume_port=5002, host='localhost'):
+def resume_pipeline_thread(pipeline, handler, resume_port=5002, host='localhost'):
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+		server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		server.bind((host, resume_port))
 		server.listen(1)
-		print("Waiting for resume signal... -main app")
+		print(f"{EVENT_HANDLER_LOG_FORMAT}Waiting for resume signal...")
 		while True:
 			conn, addr = server.accept()
 			data = conn.recv(1024).decode()
 
 			if data.strip() == "resume":
-				print("Received resume signal, unpausing the pipeline...")
-				pipeline.send_event(Gst.EVENT.new_flush_start())
-				pipeline.send_event(Gst.EVENT.new_flush_stop(False))
+				print(f"{EVENT_HANDLER_LOG_FORMAT}Received resume signal, flushing old data from pipeline...")
+				pipeline.send_event(Gst.Event.new_flush_start())
+				pipeline.send_event(Gst.Event.new_flush_stop(False))
+				print(f"{EVENT_HANDLER_LOG_FORMAT}Pipeline flushed. Setting state to PLAYING...")
 				pipeline.set_state(Gst.State.PLAYING)
+				GLib.usleep(100000)
+				print(f"{EVENT_HANDLER_LOG_FORMAT}Pipeline resumed!")
+				handler.paused = False
 
 
 
-# Fallback default function if user_data_class proves to not work:        
+# Fallback default function if event handler proves to not work:        
 def callback_func(pad, info, user_data):
 	buffer = info.get_buffer()
 
