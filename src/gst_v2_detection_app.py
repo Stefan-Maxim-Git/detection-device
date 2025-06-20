@@ -16,20 +16,16 @@ from hailo_apps_infra.gstreamer_helper_pipelines import(
     DISPLAY_PIPELINE,
 )
 
-from camera import cam_thread_func
-from callbacks import callback_func, DetectionEventHandler, resume_pipeline_thread
+from .camera import cam_thread_func
+from .callbacks import callback_func, DetectionEventHandler, resume_pipeline_thread
 
-# App Callback class:
-# Used for extracting data from the object detection process (sucb as labels)
-# CUrrent features:
-# - Frame count: counts the number of frames processed and returns it
-	
+DETECTION_LOG_FORMAT = "\033[1;32m[detection_app] \033[0m \t"
 class GstDetectionApp:
 	def __init__(self, app_callback, e_handler: DetectionEventHandler):
 		# Setting process title:
 		setproctitle.setproctitle("Object detection - Hailo")
 
-		# Signal handler for shutdown (CTRL + C) - for debug purposes:
+		# Signal handler for shutdown (CTRL + C)
 		signal.signal(signal.SIGINT, self.shutdown)
 		
 		# Parser: There is no need for a parser since the product will have standard arguments
@@ -40,7 +36,7 @@ class GstDetectionApp:
 		# Checking for TAPPAS post-process directory:
 		check_tappas = os.environ.get('TAPPAS_POST_PROC_DIR', 'not_found') 
 		if check_tappas == 'not_found':
-			print("Post-processing directory environment variable not set. Probably because setup_env.sh was not sourced.")
+			print(f"{DETECTION_LOG_FORMAT}Post-processing directory environment variable not set. Probably because setup_env.sh was not sourced.")
 			exit(1)
 
 		# Other post-processing variables:
@@ -102,7 +98,7 @@ class GstDetectionApp:
 		self.e_handler.pipeline = self.pipeline
 
 	def shutdown(self, signum=None, frame=None):
-		print("Shutting down the application...")
+		print(f"\n{DETECTION_LOG_FORMAT}Shutting down the application...")
 		signal.signal(signal.SIGINT, signal.SIG_DFL)  # Reset signal handler to default
 		self.pipeline.set_state(Gst.State.PAUSED)  # Stop the pipeline
 		GLib.usleep(100000)  # Sleep for a short time to allow the pipeline to pause
@@ -120,9 +116,9 @@ class GstDetectionApp:
 
 		try:
 			self.pipeline = Gst.parse_launch(self.pipeline_string)
-			print(f"Pipeline created: {self.pipeline_string}")
+			print(f"{DETECTION_LOG_FORMAT}Pipeline created!")
 		except Exception as e:
-			print(f"Error creating pipeline: {e}", file=sys.stderr)
+			print(f"{DETECTION_LOG_FORMAT}Error creating pipeline: {e}", file=sys.stderr)
 			sys.exit(1)
 
 		self.loop = GLib.MainLoop()
@@ -179,14 +175,14 @@ class GstDetectionApp:
 		# Dumps the pipeline graph to a dot file
 		dot_file_path = os.path.join(self.current_dir, 'pipeline.dot')
 		self.pipeline.debug_to_dot_file(Gst.DebugGraphDetails.ALL, dot_file_path)
-		print(f"Pipeline graph dumped to {dot_file_path}")
+		print(f"{DETECTION_LOG_FORMAT}Pipeline graph dumped to {dot_file_path}")
 		
 	# Pipeline event handler: handles messages received from the GStreamer pipeline
 	def pipeline_event_handler(self, bus, message, loop):
 		type = message.type
 		if type == Gst.MessageType.ERROR:
 			err, debug = message.parse_error()
-			print(f"Error: {err}, Debug info: {debug}", file=sys.stderr)
+			print(f"{DETECTION_LOG_FORMAT}Error: {err}, Debug info: {debug}", file=sys.stderr)
 			self.error_occurred = True
 
 			self.shutdown()
@@ -214,7 +210,7 @@ class GstDetectionApp:
 
 		# Check for the hailo_display element:
 		if self.pipeline.get_by_name("hailo_display") is None:
-			print("hailo_display element not found in the pipeline.")
+			print(f"{DETECTION_LOG_FORMAT}hailo_display element not found in the pipeline.")
 
 		# Disable QoS to increase FPS and reduce latency:
 		disable_qos(self.pipeline)
@@ -227,7 +223,7 @@ class GstDetectionApp:
 		)
 		resume_thread = threading.Thread(
 			target=resume_pipeline_thread,
-			args=(self.pipeline,),
+			args=(self.pipeline, self.e_handler),
 			daemon=True
 		)
 
@@ -254,15 +250,14 @@ class GstDetectionApp:
 		try:
 			self.loop.run()
 		finally:
-			self.e_handler.running = False
-			self.pipeline.set_state(Gst.State.NULL)
 			for t in self.threads:
 				t.join(timeout=1)
+			self.pipeline.set_state(Gst.State.NULL)				
 			if self.error_occurred:
-				print("Error received from bus, exitting with code 1...", file=sys.stderr)
+				print(f"{DETECTION_LOG_FORMAT}Error received from bus, exitting with code 1...", file=sys.stderr)
 				sys.exit(1)
 			else:
-				print("Cleanup completed, exiting with code 0...")
+				print(f"{DETECTION_LOG_FORMAT}Cleanup completed, exiting with code 0...")
 				sys.exit(0)
 
 # -----------------------------------------------------------------------------------------------
@@ -272,7 +267,7 @@ class GstDetectionApp:
 # increase FPS and reduce latency.
 def disable_qos(pipeline):
 	if not isinstance(pipeline, Gst.Pipeline):
-		print("Pipeline is not a Gst.Pipeline instance.")
+		print(f"{DETECTION_LOG_FORMAT}Pipeline is not a Gst.Pipeline instance.")
 		return
 
 	pipeline_iterator = pipeline.iterate_elements()
@@ -287,7 +282,7 @@ def disable_qos(pipeline):
 		# Check if the element has a QoS property and disable it
 		if 'qos' in GObject.list_properties(element):
 			element.set_property('qos', False)
-			print(f"Disabled QoS for element: {element.get_name()}")
+			print(f"{DETECTION_LOG_FORMAT}Disabled QoS for element: {element.get_name()}")
 
 if __name__ == "__main__":
 		# Create an instance of the user app callback class
