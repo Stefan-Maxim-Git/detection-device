@@ -20,6 +20,7 @@ is_sourced() {
     fi
 }
 
+echo "<-------------------- [Virtual Environment Setup] --------------------> "
 # Only proceed if the script is being sourced
 if is_sourced; then
     echo "Setting up the environment..."
@@ -122,3 +123,5 @@ if is_sourced; then
 else
     echo "This script needs to be sourced to correctly set up the environment. Please run '. $(basename "$0")' instead of executing it."
 fi
+
+echo "<-------------------- [Virtual Environment Setup: FINISHED] -------------------->"
