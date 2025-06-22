@@ -9,11 +9,13 @@ class LabelProcessingServer():
 
         self.session = requests.Session()
         self.session.trust_env = False
+        print("Created!!!!!")
         # Add a print for checking if ports were assigned (maybe)
 
     def listen_for_label(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
             server.bind((self.host, self.label_port))
+            print("[info_server] Listening for labels...")
             server.listen(1)
 
             while True:
