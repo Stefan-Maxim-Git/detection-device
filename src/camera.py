@@ -1,15 +1,17 @@
+from time import sleep
 import gi
 import cv2
 import numpy as np
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 from picamera2 import Picamera2 
+import threading
 
 CAM_LOG_FORMAT = "\033[1;36m[camera_thread] \033[0m \t"
 # PiCamera thread function:
 # This function runs in a separate thread and captures frames from the PiCamera,
 # processes them, and pushes them to the GStreamer pipeline.
-def cam_thread_func(pipeline, v_width, v_height, v_fps):
+def cam_thread_func(pipeline, resume_event, v_width, v_height, v_fps):
     # Setting up properties for the element in the pipeline 
 	# corresponding to the input (in this case, Pi Camera - rpi):
     input_src = pipeline.get_by_name("app_source")
@@ -44,11 +46,11 @@ def cam_thread_func(pipeline, v_width, v_height, v_fps):
         cam.start()
         frame_count = 0
         while True:
-
+            resume_event.wait()
             # Reading frames from the camera:
             frame_data = cam.capture_array('main')
             if frame_data is None:
-                print("No data received from camera...")
+                print(f"{CAM_LOG_FORMAT}No data received from camera...")
                 break
 
             # Converting to RGB formmat:
@@ -63,6 +65,12 @@ def cam_thread_func(pipeline, v_width, v_height, v_fps):
             gst_buffer.pts = frame_count * gst_buffer_duration
             gst_buffer.duration = gst_buffer_duration
 
+            _, pipeline_state, _ = pipeline.get_state(100 * Gst.MSECOND)
+            # print(f"{CAM_LOG_FORMAT}Pipeline state is: {pipeline_state}")
+            # if pipeline_state != Gst.State.PLAYING:
+                # print(f"{CAM_LOG_FORMAT}Pipeline state is: {pipeline_state}")
+                # sleep(0.01)
+                # continue
             # Pushing buffer to pipeline:
             ret = input_src.emit("push-buffer", gst_buffer)
             if ret != Gst.FlowReturn.OK:

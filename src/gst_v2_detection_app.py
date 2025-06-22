@@ -7,7 +7,7 @@ import setproctitle
 import signal
 import sys
 
-from hailo_apps_infra.gstreamer_helper_pipelines import(
+from .gstreamer_helper_pipelines import(
     SOURCE_PIPELINE,
     INFERENCE_PIPELINE,
     INFERENCE_PIPELINE_WRAPPER,
@@ -214,11 +214,11 @@ class GstDetectionApp:
 
 		# Disable QoS to increase FPS and reduce latency:
 		disable_qos(self.pipeline)
-
+		# print(f"{DETECTION_LOG_FORMAT}Pipeline ID: {id(self.pipeline)}")
 		# Setting up PiCamera Thread:
 		cam_thread = threading.Thread(
 			target=cam_thread_func,
-			args=(self.pipeline, 1280, 720, 30),
+			args=(self.pipeline, self.e_handler.resume_camera_event, 1280, 720, 30),
 			daemon=True	
 		)
 		resume_thread = threading.Thread(

@@ -12,6 +12,9 @@ class DetectionEventHandler:
 		self.fcount = 0
 		self.pipeline = None
 		self.paused = False
+		self.state = None
+		self.resume_camera_event = threading.Event()
+		self.resume_camera_event.set()
 
 	def increment(self):
 		self.fcount += 1
@@ -24,11 +27,12 @@ class DetectionEventHandler:
 
 		if buffer is None:
 			return Gst.PadProbeReturn.OK
-
+		# print(f"{EVENT_HANDLER_LOG_FORMAT}This is being called.")
 		user_data.increment()
 		cnt = user_data.get_count()
 		if cnt % 60 == 0:
-			print(f"Frame count: {cnt}")
+			_, self.state, _ = self.pipeline.get_state(100 * Gst.MSECOND)
+			print(f"{EVENT_HANDLER_LOG_FORMAT}Pipeline state at {cnt}: {self.state}")
 
 		roi = hailo.get_roi_from_buffer(buffer)
 		detections = roi.get_objects_typed(hailo.HAILO_DETECTION)
@@ -49,6 +53,7 @@ class DetectionEventHandler:
 		print(f"{EVENT_HANDLER_LOG_FORMAT}Object detected: {label}")
 		if not self.paused:
 			self.paused = True
+			self.resume_camera_event.clear()
 			self.pipeline.set_state(Gst.State.PAUSED)
 			GLib.usleep(100000)
 			print(f"{EVENT_HANDLER_LOG_FORMAT}Pipeline Paused.")
@@ -88,6 +93,7 @@ def resume_pipeline_thread(pipeline, handler, resume_port=5002, host='localhost'
 				GLib.usleep(100000)
 				print(f"{EVENT_HANDLER_LOG_FORMAT}Pipeline resumed!")
 				handler.paused = False
+				handler.resume_camera_event.set()
 
 
 
