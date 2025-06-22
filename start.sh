@@ -2,9 +2,13 @@
 
 set -e
 
-if ! pgrep -f "ollama serve" > /dev/null/; then
+export HAILORT_LOGGER_PATH=logs/hailo
+mkdir -p logs
+
+if ! pgrep -f "ollama serve" > /dev/null; then
     echo "Starting Ollama server..."
-    nohup ollama serve > ollama_server.log 2>&1 &
+    nohup ollama serve > logs/ollama_server.log 2>&1 &
+    echo "Ollama server started!"
     sleep 2
 else
     echo "Ollama server already running!"
@@ -14,6 +18,7 @@ MODEL="gemma:2b-instruct"
 if ! ollama list | grep -q "$MODEL"; then
     echo "Pulling Ollama model..."
     ollama pull "$MODEL"
+    echo "Pulled model $MODEL"
 else
     echo "Ollama model already present."
 fi
@@ -32,7 +37,7 @@ source setup_env.sh
 
 if ! pgrep -f "info_server.py" > /dev/null; then
     echo "Starting SLM/TTS server..."
-    nohup python src/info_server.py > slm_tts.log 2>&1 &
+    python -u src/info_server.py > logs/slm_tts.log 2>&1 &
     sleep 1
 else
     echo "SLM/TTS server already running!"
