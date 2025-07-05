@@ -10,4 +10,4 @@ HuggingFace_Token.txt
 *.log
 test.py
 Install_guide.txt
-
+output.wav
