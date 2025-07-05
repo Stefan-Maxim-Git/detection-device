@@ -6,6 +6,7 @@ import os
 import setproctitle
 import signal
 import sys
+import subprocess
 
 from .gstreamer_helper_pipelines import(
     SOURCE_PIPELINE,
@@ -51,7 +52,7 @@ class GstDetectionApp:
 
 		# Variables:
 		self.source = 'rpi' 
-		self.video_sink = "fakesink" #"autovideosink"
+		self.video_sink = "fakesink" #"autovideosink"  
 		self.pipeline = None				# Created using the Gst.parse_launch function
 		self.pipeline_string = None			# String that describes the pipeline
 		self.loop = None
@@ -63,7 +64,7 @@ class GstDetectionApp:
 
 		# Hailo parameters:
 		self.batch_size = 2
-		self.nms_score_threshold = 0.3
+		self.nms_score_threshold = 0.6
 		self.nms_iou_threshold = 0.45
 		self.video_width = 1280
 		self.video_height = 720
@@ -100,14 +101,26 @@ class GstDetectionApp:
 	def shutdown(self, signum=None, frame=None):
 		print(f"\n{DETECTION_LOG_FORMAT}Shutting down the application...")
 		signal.signal(signal.SIGINT, signal.SIG_DFL)  # Reset signal handler to default
+		print(f"{DETECTION_LOG_FORMAT}Setting state to PAUSED...")
 		self.pipeline.set_state(Gst.State.PAUSED)  # Stop the pipeline
 		GLib.usleep(100000)  # Sleep for a short time to allow the pipeline to pause
 
+		print(f"{DETECTION_LOG_FORMAT}Setting state to READY...")
 		self.pipeline.set_state(Gst.State.READY)  # Set the pipeline to READY state
 		GLib.usleep(100000)  # Sleep for a short time to allow the pipeline to be ready
 
+		print(f"{DETECTION_LOG_FORMAT}Setting state to NULL...")
 		self.pipeline.set_state(Gst.State.NULL)  # Set the pipeline to NULL state
-		GLib.idle_add(self.loop.quit)  # Quit the main loop
+
+		print(f"{DETECTION_LOG_FORMAT}Shutting down SLM/TTS server...")
+		subprocess.run(
+			["pkill", "-f", "info_server.py"],
+			stdout=subprocess.DEVNULL,
+			stderr=subprocess.DEVNULL,
+			check=False
+		)
+		print(f"{DETECTION_LOG_FORMAT}Quitting the main loop...")
+		GLib.timeout_add(10, self.loop.quit)  # Quit the main loop
 
 	def create_pipeline(self):
 		Gst.init(None)
@@ -149,7 +162,7 @@ class GstDetectionApp:
 
 		# Tracker pipeline:
 		tracker_pipeline = TRACKER_PIPELINE(
-			class_id=1
+			class_id=-1
 		)
 
 		# User callback pipeline:
@@ -241,7 +254,7 @@ class GstDetectionApp:
 		self.pipeline.set_latency(ns_latency)
 
 		# 3. Set the pipeline state to PLAYING to start processing data
-		self.pipeline.set_state(Gst.State.PLAYING)
+		# self.pipeline.set_state(Gst.State.PLAYING)
 
 		# DUmp dot file for debugging:
 		# GLib.timeout_add_seconds(3, self.dump_dot)

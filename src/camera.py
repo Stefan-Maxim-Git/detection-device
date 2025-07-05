@@ -65,7 +65,7 @@ def cam_thread_func(pipeline, resume_event, v_width, v_height, v_fps):
             gst_buffer.pts = frame_count * gst_buffer_duration
             gst_buffer.duration = gst_buffer_duration
 
-            _, pipeline_state, _ = pipeline.get_state(100 * Gst.MSECOND)
+            # _, pipeline_state, _ = pipeline.get_state(100 * Gst.MSECOND)
             # print(f"{CAM_LOG_FORMAT}Pipeline state is: {pipeline_state}")
             # if pipeline_state != Gst.State.PLAYING:
                 # print(f"{CAM_LOG_FORMAT}Pipeline state is: {pipeline_state}")

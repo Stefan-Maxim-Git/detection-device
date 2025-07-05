@@ -1,7 +1,13 @@
-import socket, requests, time
+import socket, requests, time, wave, subprocess, os
+from piper import PiperVoice
 
 class LabelProcessingServer():
     def __init__(self, label_port=5001, resume_port=5002, host='localhost', model="gemma:2b-instruct"):
+        # Directory variables:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = os.path.dirname(current_dir)
+        
+        # Connection and SLM variables
         self.label_port = label_port
         self.resume_port = resume_port
         self.host = host
@@ -9,7 +15,16 @@ class LabelProcessingServer():
 
         self.session = requests.Session()
         self.session.trust_env = False
-        print("Created!!!!!")
+
+        # TTS variables
+        self.voice = PiperVoice.load(
+            model_path=os.path.join(root_dir, "resources", "tts-voices", "en_GB-alba-medium.onnx"),
+            config_path=os.path.join(root_dir, "resources", "tts-voices", "en_GB-alba-medium.onnx.json")
+        )
+        self.wav_path = os.path.join(root_dir, "resources", "tts-voices", "output.wav")
+        self.sound_path = os.path.join(root_dir, "resources", "succes.wav")
+        self.say_text("Ready for some trivia? Let me see your object after the beep!")
+        self.resume_detection()
         # Add a print for checking if ports were assigned (maybe)
 
     def listen_for_label(self):
@@ -22,7 +37,8 @@ class LabelProcessingServer():
                 conn, addr = server.accept()
                 try:
                     label = conn.recv(1024).decode()
-                    print(f"Received label {label} from OD.")
+                    subprocess.run(["aplay", self.sound_path])
+                    self.say_text(f"Let's see what I can tell you about a {label}...")
                 finally:
                     conn.close()
                 self.process_label(label)
@@ -31,7 +47,7 @@ class LabelProcessingServer():
     def process_label(self, label):
         fun_fact = self.query_ollama(label)
         print(f"Fun fact about {label}: {fun_fact}")
-        # Add TTS later
+        self.say_text(fun_fact)
         time.sleep(4)
         print(f"Processed label {label}. Resuming pipeline...")
 
@@ -43,6 +59,12 @@ class LabelProcessingServer():
                 resume_sock.sendall(b"resume")
             except Exception as e:
                 print("Failed to send resume signal - SLM/TTS")
+    
+    def say_text(self, text):
+        with wave.open(self.wav_path, "wb") as wf:
+            self.voice.synthesize(text, wf)
+            result = subprocess.run(["aplay", self.wav_path])
+        return result.returncode
     
     def query_ollama(self, label):
         prompt = (
@@ -57,7 +79,7 @@ class LabelProcessingServer():
         }
 
         try:
-            response = self.session.post(ollama_local_url, json=data, timeout=15)
+            response = self.session.post(ollama_local_url, json=data, timeout=30)
             response.raise_for_status()
             return response.json()['response']
         except Exception as e:
